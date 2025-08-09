@@ -1,0 +1,26 @@
+{
+  "name": "andy-automate",
+  "version": "1.0.0",
+  "description": "Google Sheets data extraction automation",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "extract": "node extractData.js",
+    "report": "node daily-report.js"
+  },
+  "keywords": ["google-sheets", "automation", "data-extraction"],
+  "author": "Andy",
+  "license": "MIT",
+  "dependencies": {
+    "googleapis": "^128.0.0",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3",
+    "fs-extra": "^11.1.1",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+} 
