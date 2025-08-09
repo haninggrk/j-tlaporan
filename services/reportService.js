@@ -131,7 +131,7 @@ class ReportService {
       todayCargoRows.forEach((entry) => {
         const { awb, kg, sistem, tunai, tfMandiriK, tfMandiriL, tfBca, dfod, packing } = entry;
         
-        if (awb && awb.toString().trim() !== '') {
+        if (awb && awb.toString().trim() !== '' && awb.toString().toLowerCase() !== 'total') {
           const kgValue = kg ? parseFloat(kg.toString().replace(/[^\d.-]/g, '')) : 0;
           const tunaiValue = tunai ? parseFloat(tunai.toString().replace(/[^\d.-]/g, '')) : 0;
           const tfMandiriKValue = tfMandiriK ? parseFloat(tfMandiriK.toString().replace(/[^\d.-]/g, '')) : 0;
@@ -228,6 +228,21 @@ class ReportService {
 
         // If we're in today's date section, collect rows with prices
         if (expressCurrentDate === todayDay) {
+          // Check for "TOTAL" in ANY column of this row
+          let hasTotal = false;
+          for (let i = 0; i < row.length; i++) {
+            const cellValue = row[i];
+            if (cellValue && cellValue.toString().toLowerCase().includes('total')) {
+              hasTotal = true;
+              break;
+            }
+          }
+          
+          // Skip rows with "TOTAL" in any column
+          if (hasTotal) {
+            return;
+          }
+          
           if (tunai || mandiri || bca || packing) {
             todayExpressRows.push({ tunai, mandiri, bca, packing });
           }
@@ -280,19 +295,20 @@ class ReportService {
    */
   async getPengeluaranData(targetSheet, targetDate) {
     try {
-      const pengeluaranData = await sheetManager.getSheetData(targetSheet, 'B226:S400');
-      const targetDay = targetDate.getDate().toString(); // Without padding
+      const pengeluaranData = await sheetManager.getSheetData(targetSheet, 'B226:S248');
+      const targetDay = targetDate.getDate().toString(); // Without padding (e.g., "4")
+      const targetDayPadded = targetDate.getDate().toString().padStart(2, '0'); // With padding (e.g., "04")
       
       let totalPengeluaran = 0;
       let pengeluaranWithoutPrice = [];
       
       pengeluaranData.forEach((row, index) => {
-        const dateValue = row[1]; // Column C (date)
+        const dateValue = row[0]; // Column B (date) - FIXED!
         const description = row[2]; // Column D (keterangan)
         const amount = row[11]; // Column M (jumlah)
         
-        // Check if this row matches today's date
-        if (dateValue && dateValue.toString() === targetDay) {
+        // Check if this row matches today's date (try both padded and unpadded)
+        if (dateValue && (dateValue.toString() === targetDay || dateValue.toString() === targetDayPadded)) {
           if (description && description.toString().trim() !== '') {
             if (amount && amount.toString().trim() !== '') {
               // Has price

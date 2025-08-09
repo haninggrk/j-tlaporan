@@ -135,7 +135,7 @@ async function generateDailyReport() {
     todayCargoRows.forEach((entry) => {
       const { awb, kg, sistem, tunai, tfMandiriK, tfMandiriL, tfBca, dfod, packing } = entry;
       
-      if (awb && awb.toString().trim() !== '') {
+              if (awb && awb.toString().trim() !== '' && awb.toString().toLowerCase() !== 'total') {
         const pcs = sistem ? parseFloat(sistem.toString().replace(/[^\d.-]/g, '')) : 0;
         const kgValue = kg ? parseFloat(kg.toString().replace(/[^\d.-]/g, '')) : 0;
         const tunaiValue = tunai ? parseFloat(tunai.toString().replace(/[^\d.-]/g, '')) : 0;
@@ -204,6 +204,21 @@ async function generateDailyReport() {
 
       // If we're in today's date section, collect rows with prices
       if (expressCurrentDate === todayDay) {
+        // Check for "TOTAL" in ANY column of this row
+        let hasTotal = false;
+        for (let i = 0; i < row.length; i++) {
+          const cellValue = row[i];
+          if (cellValue && cellValue.toString().toLowerCase().includes('total')) {
+            hasTotal = true;
+            break;
+          }
+        }
+        
+        // Skip rows with "TOTAL" in any column
+        if (hasTotal) {
+          return;
+        }
+        
         // Count any row that has at least one payment value
         if (tunai || mandiri || bca || packing) {
           todayExpressRows.push({ row, awb, tunai, mandiri, bca, packing });
@@ -248,13 +263,14 @@ async function generateDailyReport() {
     let pengeluaranWithoutPrice = [];
     
     pengeluaranData.forEach((row, index) => {
-      const dateValue = row[1]; // Column C (date)
+      const dateValue = row[0]; // Column B (date) - FIXED!
       const description = row[2]; // Column D (keterangan)
       const amount = row[11]; // Column M (jumlah)
       
-      // Check if this row matches today's date (remove leading zero for comparison)
-      const targetDay = today.getDate().toString(); // Without padding
-      if (dateValue && dateValue.toString() === targetDay) {
+      // Check if this row matches today's date (try both padded and unpadded)
+      const targetDay = today.getDate().toString(); // Without padding (e.g., "4")
+      const targetDayPadded = today.getDate().toString().padStart(2, '0'); // With padding (e.g., "04")
+      if (dateValue && (dateValue.toString() === targetDay || dateValue.toString() === targetDayPadded)) {
         if (description && description.toString().trim() !== '') {
           if (amount && amount.toString().trim() !== '') {
             // Has price
