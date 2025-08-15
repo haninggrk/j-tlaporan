@@ -94,6 +94,8 @@ class ReportService {
         const dateValue = row[1]; // Column B (date)
         const awb = row[3]; // Column D (AWB)
         const kg = row[7]; // Column H (Kg)
+        const secondKG = row[6];
+
         const sistem = row[10]; // Column K (Sistem)
         const tunai = row[8]; // Column I (Tunai)
         const tfMandiriK = row[10]; // Column K (TF Mandiri - bagian 1)
@@ -113,7 +115,7 @@ class ReportService {
 
         // If we're in today's date section, collect the row
         if (currentDate === todayDay) {
-          todayCargoRows.push({ row, awb, kg, sistem, tunai, tfMandiriK, tfMandiriL, tfBca, dfod, packing });
+          todayCargoRows.push({ row, awb, kg, sistem, tunai, tfMandiriK, tfMandiriL, tfBca, dfod, packing, secondKG });
         }
       });
 
@@ -129,8 +131,7 @@ class ReportService {
       let totalPacking = 0;
 
       todayCargoRows.forEach((entry) => {
-        const { awb, kg, sistem, tunai, tfMandiriK, tfMandiriL, tfBca, dfod, packing } = entry;
-        
+        const { awb, kg, sistem, tunai, tfMandiriK, tfMandiriL, tfBca, dfod, packing, secondKG } = entry;
         if (awb && awb.toString().trim() !== '' && awb.toString().toLowerCase() !== 'total') {
           const kgValue = kg ? parseFloat(kg.toString().replace(/[^\d.-]/g, '')) : 0;
           const tunaiValue = tunai ? parseFloat(tunai.toString().replace(/[^\d.-]/g, '')) : 0;
@@ -139,7 +140,7 @@ class ReportService {
           const tfBcaValue = tfBca ? parseFloat(tfBca.toString().replace(/[^\d.-]/g, '')) : 0;
           const dfodValue = dfod ? parseFloat(dfod.toString().replace(/[^\d.-]/g, '')) : 0;
           const packingValue = packing ? parseFloat(packing.toString().replace(/[^\d.-]/g, '')) : 0;
-          
+          const secondKGValue = secondKG ? parseFloat(secondKG.toString().replace(/[^\d.-]/g, '')) : 0;
           totalTunai += tunaiValue;
           totalTfMandiri += tfMandiriKValue + tfMandiriLValue;
           totalTfBca += tfBcaValue;
@@ -151,6 +152,7 @@ class ReportService {
           if (awbString.includes('tiktok') || awbString.includes('shopee') || awbString.includes('api')) {
             onlineAWBs.push(awb.toString());
             totalOnlineKg += kgValue;
+            totalOnlineKg += secondKGValue;
           } else if (awb.toString().match(/^\d{10,}$/)) {
             // Only count numeric AWB as regular AWB
             totalAWB++;
