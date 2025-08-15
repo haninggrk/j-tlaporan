@@ -102,8 +102,8 @@ async function generateDailyReport() {
       const tfMandiriK = row[10]; // Column K (TF Mandiri - bagian 1)
       const tfMandiriL = row[11]; // Column L (TF Mandiri - bagian 2)
       const tfBca = row[12]; // Column M (TF BCA)
-      const dfod = row[13]; // Column N (DFOD)
-      const packing = row[14]; // Column O (Packing)
+      const dfod = row[14]; // Column N (DFOD)
+      const packing = row[15]; // Column O (Packing)
       
       // Check if this row has a date
       if (dateValue && dateValue.toString && dateValue.toString().trim() !== '') {
