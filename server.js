@@ -81,6 +81,63 @@ app.get('/api/report/:date', async (req, res) => {
 });
 
 /**
+ * GET /api/report/range/:startDate/:endDate
+ * Get aggregated report for date range
+ * @param {string} startDate - Start date in YYYY-MM-DD format
+ * @param {string} endDate - End date in YYYY-MM-DD format
+ */
+app.get('/api/report/range/:startDate/:endDate', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.params;
+    
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date format',
+        message: 'Please use YYYY-MM-DD format for both dates (e.g., /api/report/range/2025-08-01/2025-08-07)'
+      });
+    }
+    
+    const startDateObj = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    
+    // Check if dates are valid
+    if (isNaN(startDateObj.getTime()) || isNaN(endDateObj.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date',
+        message: 'Please provide valid dates'
+      });
+    }
+    
+    // Check if start date is before or equal to end date
+    if (startDateObj > endDateObj) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid date range',
+        message: 'Start date must be before or equal to end date'
+      });
+    }
+    
+    const report = await reportService.generateRangeReport(startDateObj, endDateObj);
+    
+    res.json({
+      success: true,
+      data: report
+    });
+  } catch (error) {
+    console.error('Error generating range report:', req.params, error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate range report',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/health
  * Health check endpoint
  */
@@ -103,11 +160,13 @@ app.get('/', (req, res) => {
     endpoints: {
       'GET /api/health': 'Health check',
       'GET /api/report/today': 'Get today\'s daily report',
-      'GET /api/report/:date': 'Get daily report for specific date (YYYY-MM-DD format)'
+      'GET /api/report/:date': 'Get daily report for specific date (YYYY-MM-DD format)',
+      'GET /api/report/range/:startDate/:endDate': 'Get aggregated report for date range (YYYY-MM-DD format)'
     },
     examples: {
       today: '/api/report/today',
-      specificDate: '/api/report/2025-08-04'
+      specificDate: '/api/report/2025-08-04',
+      dateRange: '/api/report/range/2025-08-01/2025-08-07'
     }
   });
 });

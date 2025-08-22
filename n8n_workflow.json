@@ -1,0 +1,630 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://laporanjnt.hgalih.com/api/report/today",
+        "options": {}
+      },
+      "id": "cc5a2eee-43ec-46ab-a8ed-3faf31902858",
+      "name": "Fetch Today Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- Helpers ---\nconst n = (v) => {\n  const num = Number(v);\n  return Number.isFinite(num) ? num : 0;\n};\nconst fmtNum = (v) => n(v).toLocaleString('id-ID'); // e.g., \"1.234\"\nconst fmtCurrency = (v) => `Rp ${fmtNum(v)}`;\nconst safeArr = (v) => (Array.isArray(v) ? v : []);\nconst safeStr = (v, fallback = '-') => (v ?? '') === '' || v == null ? fallback : String(v);\n\n// Date formatter (Indonesian)\nconst formatDateID = (dateInput) => {\n  const months = [\n    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',\n    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'\n  ];\n  const d = dateInput ? new Date(dateInput) : null;\n  if (!d || isNaN(d.getTime())) return '-';\n  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;\n};\n\n// --- Source data (robust) ---\nconst fetched = $('Fetch Today Report')?.first?.();\nconst data = fetched?.json?.data ?? {};\n\n// --- Pieces ---\nconst formattedDate = formatDateID(data?.date);\n\n// Absensi\nlet attendanceText = '';\nsafeArr(data?.attendance).forEach((person, index) => {\n  const name = safeStr(person?.name, 'Tanpa Nama');\n  const inTime = safeStr(person?.inTime, '-');\n  const outTime = safeStr(person?.outTime, '-');\n  attendanceText += `${index + 1}. ${name} (In: ${inTime}, Out: ${outTime})\\n`;\n});\nif (!attendanceText) attendanceText = '-\\n';\n\n// CARGO numbers (safe)\nconst totalAWB = fmtNum(data?.cargo?.totalAWB);\nconst totalTonase = fmtNum(data?.cargo?.totalTonase);\nconst totalTonaseOnline = fmtNum(data?.cargo?.totalTonaseOnline);\n\n// AWB Online text: keep \"TBD\" if exactly \"TBD\", else numeric (default 0)\nlet awbOnlineTextRaw = data?.cargo?.totalAWBOnline;\nconst awbOnlineText = awbOnlineTextRaw === 'TBD' ? 'TBD' : fmtNum(awbOnlineTextRaw);\n\n// Payments (safe)\nconst totalTunai = fmtCurrency(data?.cargo?.totalTunai);\nconst totalTfMandiri = fmtCurrency(data?.cargo?.totalTfMandiri);\nconst totalTfBca = fmtCurrency(data?.cargo?.totalTfBca);\nconst totalDfod = fmtCurrency(data?.cargo?.totalDfod);\nconst totalPacking = fmtCurrency(data?.cargo?.totalPacking);\n\n// EXPRESS (safe)\nconst totalAWBExpress = fmtNum(data?.express?.totalAWBExpress);\nconst totalTunaiExpress = fmtCurrency(data?.express?.totalTunaiExpress);\nconst totalTfMandiriExpress = fmtCurrency(data?.express?.totalTfMandiriExpress);\nconst totalTfBcaExpress = fmtCurrency(data?.express?.totalTfBcaExpress);\nconst totalPackingExpress = fmtCurrency(data?.express?.totalPackingExpress);\n\n// Pengeluaran (safe)\nconst totalPengeluaran = fmtCurrency(data?.pengeluaran?.totalPengeluaran);\nconst itemsWithoutPriceArr = safeArr(data?.pengeluaran?.itemsWithoutPrice);\nconst itemsWithoutPriceText = itemsWithoutPriceArr.length\n  ? itemsWithoutPriceArr.map((item) => `- ${safeStr(item, '-')}`).join('\\n')\n  : '-';\n\n// --- Final message ---\nconst message = `*Laporan Harian J&T*\n${formattedDate}\n\n*Absensi:*\n${attendanceText}*CARGO*\n2.1 AWB Reg: ${totalAWB} resi, ${totalTonase} kg\n2.2 AWB Ecom: ${awbOnlineTextRaw}, ${totalTonaseOnline} kg\n2.3 Tunai: ${totalTunai}\n2.4 TF Mandiri: ${totalTfMandiri}\n2.5 TF BCA: ${totalTfBca}\n2.6 DFOD: ${totalDfod}\n2.7 Packing: ${totalPacking}\n\n*EXPRESS*\n3.1 AWB Express: ${totalAWBExpress} pcs\n3.2 Tunai Express: ${totalTunaiExpress}\n3.3 TF Mandiri Express: ${totalTfMandiriExpress}\n3.4 TF BCA Express: ${totalTfBcaExpress}\n3.5 Packing Express: ${totalPackingExpress}\n\n*PENGELUARAN / PEMBELIAN*\n4.1 Total: ${totalPengeluaran}\n4.2 Pengeluaran Tanpa Harga:\n${itemsWithoutPriceText}`;\n\nreturn {\n  message,\n  rawData: data,\n  formattedDate\n};\n"
+      },
+      "id": "dcc5e37a-8127-4680-9c9b-6d670bd7b359",
+      "name": "Format Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        -80
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9632752f-4a23-4714-9438-d7d72c72cfe9",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "andy",
+        "remoteJid": "+6281357737545",
+        "messageText": "={{ $json.message }}",
+        "options_message": {}
+      },
+      "type": "n8n-nodes-evolution-api-en.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        -120
+      ],
+      "id": "081df767-52ad-4778-b668-1ca013db0db0",
+      "name": "Evolution API",
+      "credentials": {
+        "evolutionApi": {
+          "id": "NrFw0hbIQx2UDKsx",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        140,
+        -60
+      ],
+      "id": "bead201d-9e5f-41bd-a0e5-f71372b3a341",
+      "name": "Wait",
+      "webhookId": "92e5c482-3340-4e35-94c5-a85c30aa207b"
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "andy",
+        "remoteJid": "+6281252625242",
+        "messageText": "={{ $json.data.message.conversation }}",
+        "options_message": {}
+      },
+      "type": "n8n-nodes-evolution-api-en.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        360,
+        -40
+      ],
+      "id": "6288d9f1-4d89-4254-a953-26063e2f22f7",
+      "name": "Evolution API1",
+      "credentials": {
+        "evolutionApi": {
+          "id": "NrFw0hbIQx2UDKsx",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/messages-upsert",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1060,
+        260
+      ],
+      "id": "9debd3a8-60c7-48e1-b9d6-42fa9a2db700",
+      "name": "Webhook",
+      "webhookId": "bbea837a-fa20-4ffa-856f-0ae2719c03ff"
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- Helpers ---\nconst n = (v) => {\n  const num = Number(v);\n  return Number.isFinite(num) ? num : 0;\n};\nconst fmtNum = (v) => n(v).toLocaleString('id-ID'); // e.g., \"1.234\"\nconst fmtCurrency = (v) => `Rp ${fmtNum(v)}`;\nconst safeArr = (v) => (Array.isArray(v) ? v : []);\nconst safeStr = (v, fallback = '-') => (v ?? '') === '' || v == null ? fallback : String(v);\n\n// Date formatter (Indonesian)\nconst formatDateID = (dateInput) => {\n  const months = [\n    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',\n    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'\n  ];\n  const d = dateInput ? new Date(dateInput) : null;\n  if (!d || isNaN(d.getTime())) return '-';\n  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;\n};\n\n// --- Source data (robust) ---\nconst fetched = $('Ambil Laporan Sesuai Tanggal')?.first?.();\nconst data = fetched?.json?.data ?? {};\n\n// --- Pieces ---\nconst formattedDate = formatDateID(data?.date);\n\n// Absensi\nlet attendanceText = '';\nsafeArr(data?.attendance).forEach((person, index) => {\n  const name = safeStr(person?.name, 'Tanpa Nama');\n  const inTime = safeStr(person?.inTime, '-');\n  const outTime = safeStr(person?.outTime, '-');\n  attendanceText += `${index + 1}. ${name} (In: ${inTime}, Out: ${outTime})\\n`;\n});\nif (!attendanceText) attendanceText = '-\\n';\n\n// CARGO numbers (safe)\nconst totalAWB = fmtNum(data?.cargo?.totalAWB);\nconst totalTonase = fmtNum(data?.cargo?.totalTonase);\nconst totalTonaseOnline = fmtNum(data?.cargo?.totalTonaseOnline);\n\n// AWB Online text: keep \"TBD\" if exactly \"TBD\", else numeric (default 0)\nlet awbOnlineTextRaw = data?.cargo?.totalAWBOnline;\nconst awbOnlineText = awbOnlineTextRaw === 'TBD' ? 'TBD' : fmtNum(awbOnlineTextRaw);\n\n// Payments (safe)\nconst totalTunai = fmtCurrency(data?.cargo?.totalTunai);\nconst totalTfMandiri = fmtCurrency(data?.cargo?.totalTfMandiri);\nconst totalTfBca = fmtCurrency(data?.cargo?.totalTfBca);\nconst totalDfod = fmtCurrency(data?.cargo?.totalDfod);\nconst totalPacking = fmtCurrency(data?.cargo?.totalPacking);\n\n// EXPRESS (safe)\nconst totalAWBExpress = fmtNum(data?.express?.totalAWBExpress);\nconst totalTunaiExpress = fmtCurrency(data?.express?.totalTunaiExpress);\nconst totalTfMandiriExpress = fmtCurrency(data?.express?.totalTfMandiriExpress);\nconst totalTfBcaExpress = fmtCurrency(data?.express?.totalTfBcaExpress);\nconst totalPackingExpress = fmtCurrency(data?.express?.totalPackingExpress);\n\n// Pengeluaran (safe)\nconst totalPengeluaran = fmtCurrency(data?.pengeluaran?.totalPengeluaran);\nconst itemsWithoutPriceArr = safeArr(data?.pengeluaran?.itemsWithoutPrice);\nconst itemsWithoutPriceText = itemsWithoutPriceArr.length\n  ? itemsWithoutPriceArr.map((item) => `- ${safeStr(item, '-')}`).join('\\n')\n  : '-';\n\n// --- Final message ---\nconst message = `*Laporan Harian J&T*\n${formattedDate}\n\n*Absensi:*\n${attendanceText}*CARGO*\n2.1 AWB Reg: ${totalAWB} resi, ${totalTonase} kg\n2.2 AWB Ecom: ${awbOnlineTextRaw}, ${totalTonaseOnline} kg\n2.3 Tunai: ${totalTunai}\n2.4 TF Mandiri: ${totalTfMandiri}\n2.5 TF BCA: ${totalTfBca}\n2.6 DFOD: ${totalDfod}\n2.7 Packing: ${totalPacking}\n\n*EXPRESS*\n3.1 AWB Express: ${totalAWBExpress} pcs\n3.2 Tunai Express: ${totalTunaiExpress}\n3.3 TF Mandiri Express: ${totalTfMandiriExpress}\n3.4 TF BCA Express: ${totalTfBcaExpress}\n3.5 Packing Express: ${totalPackingExpress}\n\n*PENGELUARAN / PEMBELIAN*\n4.1 Total: ${totalPengeluaran}\n4.2 Pengeluaran Tanpa Harga:\n${itemsWithoutPriceText}`;\n\nreturn {\n  message,\n  rawData: data,\n  formattedDate\n};"
+      },
+      "id": "6d429740-4962-4bbd-897d-5f9973c4d169",
+      "name": "Format Message1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 20
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1200,
+        20
+      ],
+      "id": "9609fc1f-ea0a-419e-be39-7c771d38b3fc",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a4237049-86ac-4f67-b2e5-aa46948946d6",
+              "leftValue": "={{ $json.body.data.key.remoteJid }}",
+              "rightValue": "6281252625242@s.whatsapp.net",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "d1e20174-0785-4556-9be0-f0141885eb63",
+              "leftValue": "={{ $json.body.data.key.remoteJid }}",
+              "rightValue": "6281357737545@s.whatsapp.net",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "750a742b-b775-45c5-955f-6226432c6c4e",
+              "leftValue": "={{ $json.body.data.key.remoteJid }}",
+              "rightValue": "6282147439937@s.whatsapp.net",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "229274c6-8ffd-4253-898b-310ecf006755",
+              "leftValue": "={{ $json.body.data.key.remoteJid }}",
+              "rightValue": "120363420007619583@g.us",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -720,
+        280
+      ],
+      "id": "ae5511c7-d9de-4e11-8508-4fe288e9f87b",
+      "name": "User Authorize"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3a157013-0c7f-4713-9114-bf6f6e595d6f",
+              "leftValue": "={{ $json.body.data.message.conversation }}",
+              "rightValue": "/laporan",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -380,
+        240
+      ],
+      "id": "efa11e14-42be-4f38-a2c4-00568ddfdac2",
+      "name": "Jika Minta Laporan"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "range-check-1",
+              "leftValue": "={{ $json.body.data.message.conversation.split(' ').length }}",
+              "rightValue": 3,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -200,
+        180
+      ],
+      "id": "check-range-request",
+      "name": "Cek Permintaan Range"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "8636576b-928a-4e71-92ff-dbfea51b5a5f",
+              "name": "date",
+              "value": "={{$json.body.data.message.conversation.split(\" \")[1]}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        120
+      ],
+      "id": "3fad4151-7e68-45ce-a203-005195b536a1",
+      "name": "Dapatkan Tanggal"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "range-start-date",
+              "name": "startDate",
+              "value": "={{$json.body.data.message.conversation.split(\" \")[1]}}",
+              "type": "string"
+            },
+            {
+              "id": "range-end-date",
+              "name": "endDate",
+              "value": "={{$json.body.data.message.conversation.split(\" \")[2]}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -20,
+        240
+      ],
+      "id": "get-date-range",
+      "name": "Dapatkan Range Tanggal"
+    },
+    {
+      "parameters": {
+        "url": "=https://laporanjnt.hgalih.com/api/report/{{ $json[\"date\"].split(\"/\").reverse().map((v,i)=> i==0 ? \"20\"+v : v.padStart(2,\"0\")).join(\"-\") }}\n",
+        "options": {}
+      },
+      "id": "e186fd40-0f86-4a39-ac8e-d78fc3d135a9",
+      "name": "Ambil Laporan Sesuai Tanggal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        300,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://laporanjnt.hgalih.com/api/report/range/{{ $json[\"startDate\"].split(\"/\").reverse().map((v,i)=> i==0 ? \"20\"+v : v.padStart(2,\"0\")).join(\"-\") }}/{{ $json[\"endDate\"].split(\"/\").reverse().map((v,i)=> i==0 ? \"20\"+v : v.padStart(2,\"0\")).join(\"-\") }}",
+        "options": {}
+      },
+      "id": "fetch-range-report",
+      "name": "Ambil Laporan Range",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// --- Helpers ---\nconst n = (v) => {\n  const num = Number(v);\n  return Number.isFinite(num) ? num : 0;\n};\nconst fmtNum = (v) => n(v).toLocaleString('id-ID');\nconst fmtCurrency = (v) => `Rp ${fmtNum(v)}`;\nconst safeArr = (v) => (Array.isArray(v) ? v : []);\nconst safeStr = (v, fallback = '-') => (v ?? '') === '' || v == null ? fallback : String(v);\n\n// Date formatter (Indonesian)\nconst formatDateID = (dateInput) => {\n  const months = [\n    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',\n    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'\n  ];\n  const d = dateInput ? new Date(dateInput) : null;\n  if (!d || isNaN(d.getTime())) return '-';\n  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;\n};\n\n// --- Source data (robust) ---\nconst fetched = $('Ambil Laporan Range')?.first?.();\nconst data = fetched?.json?.data ?? {};\n\n// --- Range info ---\nconst startDate = formatDateID(data?.dateRange?.start);\nconst endDate = formatDateID(data?.dateRange?.end);\nconst totalDays = data?.totalDays || 0;\n\n// --- Aggregated CARGO numbers (safe) ---\nconst agg = data?.aggregated ?? {};\nconst totalAWB = fmtNum(agg?.cargo?.totalAWB);\nconst totalTonase = fmtNum(agg?.cargo?.totalTonase);\nconst totalTonaseOnline = fmtNum(agg?.cargo?.totalTonaseOnline);\n\n// AWB Online summary\nconst awbOnlineArr = safeArr(agg?.cargo?.totalAWBOnline);\nconst awbOnlineText = awbOnlineArr.length > 0 && awbOnlineArr[0] !== 'No online AWBs found' \n  ? awbOnlineArr.join('\\n') \n  : 'TBD';\n\n// Payments (safe)\nconst totalTunai = fmtCurrency(agg?.cargo?.totalTunai);\nconst totalTfMandiri = fmtCurrency(agg?.cargo?.totalTfMandiri);\nconst totalTfBca = fmtCurrency(agg?.cargo?.totalTfBca);\nconst totalDfod = fmtCurrency(agg?.cargo?.totalDfod);\nconst totalPacking = fmtCurrency(agg?.cargo?.totalPacking);\n\n// EXPRESS (safe)\nconst totalAWBExpress = fmtNum(agg?.express?.totalAWBExpress);\nconst totalTunaiExpress = fmtCurrency(agg?.express?.totalTunaiExpress);\nconst totalTfMandiriExpress = fmtCurrency(agg?.express?.totalTfMandiriExpress);\nconst totalTfBcaExpress = fmtCurrency(agg?.express?.totalTfBcaExpress);\nconst totalPackingExpress = fmtCurrency(agg?.express?.totalPackingExpress);\n\n// Pengeluaran (safe)\nconst totalPengeluaran = fmtCurrency(agg?.pengeluaran?.totalPengeluaran);\nconst itemsWithoutPriceArr = safeArr(agg?.pengeluaran?.allItemsWithoutPrice);\nconst itemsWithoutPriceText = itemsWithoutPriceArr.length\n  ? itemsWithoutPriceArr.map((item) => `- ${safeStr(item, '-')}`).join('\\n')\n  : '-';\n\n// --- Final message ---\nconst message = `*Laporan Range J&T*\n${startDate} - ${endDate}\n(${totalDays} hari)\n\n*CARGO (Total)*\n2.1 AWB Reg: ${totalAWB} resi, ${totalTonase} kg\n2.2 AWB Ecom: ${totalTonaseOnline} kg\n${awbOnlineText}\n2.3 Tunai: ${totalTunai}\n2.4 TF Mandiri: ${totalTfMandiri}\n2.5 TF BCA: ${totalTfBca}\n2.6 DFOD: ${totalDfod}\n2.7 Packing: ${totalPacking}\n\n*EXPRESS (Total)*\n3.1 AWB Express: ${totalAWBExpress} pcs\n3.2 Tunai Express: ${totalTunaiExpress}\n3.3 TF Mandiri Express: ${totalTfMandiriExpress}\n3.4 TF BCA Express: ${totalTfBcaExpress}\n3.5 Packing Express: ${totalPackingExpress}\n\n*PENGELUARAN / PEMBELIAN (Total)*\n4.1 Total: ${totalPengeluaran}\n4.2 Pengeluaran Tanpa Harga:\n${itemsWithoutPriceText}`;\n\nreturn {\n  message,\n  rawData: data,\n  dateRange: `${startDate} - ${endDate}`\n};"
+      },
+      "id": "format-range-message",
+      "name": "Format Range Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "andy",
+        "remoteJid": "={{ $('Webhook').item.json.body.data.key.remoteJid }}",
+        "messageText": "={{ $json.message }}",
+        "options_message": {}
+      },
+      "type": "n8n-nodes-evolution-api-en.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        780,
+        160
+      ],
+      "id": "50ab5a9d-2221-4a93-9be5-ff5dcacb0141",
+      "name": "Kirim Pesan",
+      "credentials": {
+        "evolutionApi": {
+          "id": "NrFw0hbIQx2UDKsx",
+          "name": "Evolution account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "messages-api",
+        "instanceName": "andy",
+        "remoteJid": "={{ $('Webhook').item.json.body.data.key.remoteJid }}",
+        "messageText": "={{ $json.message }}",
+        "options_message": {}
+      },
+      "type": "n8n-nodes-evolution-api-en.evolutionApi",
+      "typeVersion": 1,
+      "position": [
+        780,
+        280
+      ],
+      "id": "send-range-message",
+      "name": "Kirim Pesan Range",
+      "credentials": {
+        "evolutionApi": {
+          "id": "NrFw0hbIQx2UDKsx",
+          "name": "Evolution account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "nocode.hireindonesian.com",
+            "user-agent": "axios/1.7.9",
+            "content-length": "1109",
+            "accept-encoding": "gzip, compress, deflate, br",
+            "content-type": "application/json",
+            "x-forwarded-for": "10.0.1.1",
+            "x-forwarded-host": "nocode.hireindonesian.com",
+            "x-forwarded-proto": "https"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "event": "messages.upsert",
+            "instance": "andy",
+            "data": {
+              "key": {
+                "remoteJid": "6281357737545@s.whatsapp.net",
+                "fromMe": false,
+                "id": "3EB01E8A5EC9227A559DB0"
+              },
+              "pushName": "Galih",
+              "status": "DELIVERY_ACK",
+              "message": {
+                "messageContextInfo": {
+                  "deviceListMetadata": {
+                    "senderKeyHash": "o6KIBoFxaPzx5g==",
+                    "senderTimestamp": "1754620236",
+                    "senderAccountType": "E2EE",
+                    "receiverAccountType": "E2EE",
+                    "recipientKeyHash": "8l9YglnxtFDhWQ==",
+                    "recipientTimestamp": "1752330770"
+                  },
+                  "deviceListMetadataVersion": 2,
+                  "messageSecret": "QhWvd4Cv3fMBo3eEjZ2+ZLfPTjDjlHCv73WyXqBsGE8="
+                },
+                "conversation": "/laporan 08/08/25"
+              },
+              "contextInfo": {
+                "ephemeralSettingTimestamp": "1755268024",
+                "disappearingMode": {
+                  "initiator": "CHANGED_IN_CHAT",
+                  "trigger": "CHAT_SETTING",
+                  "initiatedByMe": false
+                }
+              },
+              "messageType": "conversation",
+              "messageTimestamp": 1755269725,
+              "instanceId": "e3863306-0f36-4cc6-9573-2929b3a12904",
+              "source": "web"
+            },
+            "destination": "https://nocode.hireindonesian.com/webhook",
+            "date_time": "2025-08-15T11:55:26.203Z",
+            "sender": "6281252625242@s.whatsapp.net",
+            "server_url": "https://evo-wos4ogw8og04gws4gc8sgsok.hireindonesian.com",
+            "apikey": "EC2298F2E1CF-4594-A2FA-734C8252D312"
+          },
+          "webhookUrl": "https://nocode.hireindonesian.com/webhook/messages-upsert",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Fetch Today Report": {
+      "main": [
+        [
+          {
+            "node": "Format Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Evolution API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evolution API": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Evolution API1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "User Authorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Message1": {
+      "main": [
+        [
+          {
+            "node": "Kirim Pesan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Today Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "User Authorize": {
+      "main": [
+        [
+          {
+            "node": "Jika Minta Laporan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Jika Minta Laporan": {
+      "main": [
+        [
+          {
+            "node": "Dapatkan Tanggal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dapatkan Tanggal": {
+      "main": [
+        [
+          {
+            "node": "Ambil Laporan Sesuai Tanggal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ambil Laporan Sesuai Tanggal": {
+      "main": [
+        [
+          {
+            "node": "Format Message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "561111ee-00e4-4f81-9313-d0e51ec419da",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "93a1b40c872bd768235f3971b8a945581ac4c46f0df57415f4e69194eba15b2c"
+  },
+  "id": "VRAOT7MLKgI8ZnT5",
+  "tags": []
+}

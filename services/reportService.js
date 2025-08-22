@@ -68,6 +68,152 @@ class ReportService {
   }
 
   /**
+   * Generate aggregated report for a date range
+   * @param {Date} startDate - Start date of the range
+   * @param {Date} endDate - End date of the range
+   * @returns {Promise<Object>} Aggregated report data
+   */
+  async generateRangeReport(startDate, endDate) {
+    try {
+      const reports = [];
+      const currentDate = new Date(startDate);
+      
+      // Generate reports for each date in the range
+      while (currentDate <= endDate) {
+        try {
+          const dailyReport = await this.generateDailyReport(new Date(currentDate));
+          reports.push(dailyReport);
+        } catch (error) {
+          console.log(`No data available for ${currentDate.toISOString().split('T')[0]}`);
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      if (reports.length === 0) {
+        throw new Error('No data available for the specified date range');
+      }
+      
+      // Aggregate the data
+      const aggregatedData = this.aggregateReports(reports);
+      
+      return {
+        dateRange: {
+          start: startDate.toISOString().split('T')[0],
+          end: endDate.toISOString().split('T')[0],
+          startDisplay: startDate.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          }),
+          endDisplay: endDate.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+          })
+        },
+        totalDays: reports.length,
+        dailyReports: reports,
+        aggregated: aggregatedData
+      };
+      
+    } catch (error) {
+      console.error('Error generating range report:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Aggregate multiple daily reports into summary data
+   * @param {Array} reports - Array of daily report objects
+   * @returns {Object} Aggregated data
+   */
+  aggregateReports(reports) {
+    const aggregated = {
+      attendance: {
+        totalUniqueEmployees: new Set(),
+        totalAttendanceDays: 0,
+        averageAttendancePerDay: 0
+      },
+      cargo: {
+        totalAWB: 0,
+        totalAWBOnline: [],
+        totalTonase: 0,
+        totalTonaseOnline: 0,
+        totalTunai: 0,
+        totalTfMandiri: 0,
+        totalTfBca: 0,
+        totalDfod: 0,
+        totalPacking: 0
+      },
+      express: {
+        totalAWBExpress: 0,
+        totalTunaiExpress: 0,
+        totalTfMandiriExpress: 0,
+        totalTfBcaExpress: 0,
+        totalPackingExpress: 0
+      },
+      pengeluaran: {
+        totalPengeluaran: 0,
+        allItemsWithoutPrice: []
+      }
+    };
+
+    reports.forEach(report => {
+      // Aggregate attendance
+      if (report.attendance && report.attendance.length > 0) {
+        report.attendance.forEach(emp => {
+          aggregated.attendance.totalUniqueEmployees.add(emp.name);
+        });
+        aggregated.attendance.totalAttendanceDays += report.attendance.length;
+      }
+
+      // Aggregate cargo
+      if (report.cargo) {
+        aggregated.cargo.totalAWB += report.cargo.totalAWB || 0;
+        aggregated.cargo.totalTonase += report.cargo.totalTonase || 0;
+        aggregated.cargo.totalTonaseOnline += report.cargo.totalTonaseOnline || 0;
+        aggregated.cargo.totalTunai += report.cargo.totalTunai || 0;
+        aggregated.cargo.totalTfMandiri += report.cargo.totalTfMandiri || 0;
+        aggregated.cargo.totalTfBca += report.cargo.totalTfBca || 0;
+        aggregated.cargo.totalDfod += report.cargo.totalDfod || 0;
+        aggregated.cargo.totalPacking += report.cargo.totalPacking || 0;
+        
+        if (report.cargo.totalAWBOnline && report.cargo.totalAWBOnline !== 'TBD') {
+          aggregated.cargo.totalAWBOnline.push(`${report.date}: ${report.cargo.totalAWBOnline}`);
+        }
+      }
+
+      // Aggregate express
+      if (report.express) {
+        aggregated.express.totalAWBExpress += report.express.totalAWBExpress || 0;
+        aggregated.express.totalTunaiExpress += report.express.totalTunaiExpress || 0;
+        aggregated.express.totalTfMandiriExpress += report.express.totalTfMandiriExpress || 0;
+        aggregated.express.totalTfBcaExpress += report.express.totalTfBcaExpress || 0;
+        aggregated.express.totalPackingExpress += report.express.totalPackingExpress || 0;
+      }
+
+      // Aggregate pengeluaran
+      if (report.pengeluaran) {
+        aggregated.pengeluaran.totalPengeluaran += report.pengeluaran.totalPengeluaran || 0;
+        if (report.pengeluaran.itemsWithoutPrice && report.pengeluaran.itemsWithoutPrice.length > 0) {
+          aggregated.pengeluaran.allItemsWithoutPrice.push(`${report.date}: ${report.pengeluaran.itemsWithoutPrice.join(', ')}`);
+        }
+      }
+    });
+
+    // Calculate averages
+    aggregated.attendance.totalUniqueEmployees = aggregated.attendance.totalUniqueEmployees.size;
+    aggregated.attendance.averageAttendancePerDay = reports.length > 0 ?
+      (aggregated.attendance.totalAttendanceDays / reports.length).toFixed(1) : 0;
+
+    // Format online AWB summary
+    aggregated.cargo.totalAWBOnline = aggregated.cargo.totalAWBOnline.length > 0 ?
+      aggregated.cargo.totalAWBOnline : ['No online AWBs found'];
+
+    return aggregated;
+  }
+
+  /**
    * Get CARGO data for a specific date
    */
   async getCargoData(targetSheet, targetDate) {
@@ -94,7 +240,7 @@ class ReportService {
         const dateValue = row[1]; // Column B (date)
         const awb = row[3]; // Column D (AWB)
         const kg = row[7]; // Column H (Kg)
-        const secondKG = row[6];
+        const secondKG = row[6]; // Column G (SecondKG)
 
         const sistem = row[10]; // Column K (Sistem)
         const tunai = row[8]; // Column I (Tunai)
@@ -130,8 +276,9 @@ class ReportService {
       let totalDfod = 0;
       let totalPacking = 0;
 
-      todayCargoRows.forEach((entry) => {
+      todayCargoRows.forEach((entry, index) => {
         const { awb, kg, sistem, tunai, tfMandiriK, tfMandiriL, tfBca, dfod, packing, secondKG } = entry;
+        
         if (awb && awb.toString().trim() !== '' && awb.toString().toLowerCase() !== 'total') {
           const kgValue = kg ? parseFloat(kg.toString().replace(/[^\d.-]/g, '')) : 0;
           const tunaiValue = tunai ? parseFloat(tunai.toString().replace(/[^\d.-]/g, '')) : 0;
@@ -141,6 +288,7 @@ class ReportService {
           const dfodValue = dfod ? parseFloat(dfod.toString().replace(/[^\d.-]/g, '')) : 0;
           const packingValue = packing ? parseFloat(packing.toString().replace(/[^\d.-]/g, '')) : 0;
           const secondKGValue = secondKG ? parseFloat(secondKG.toString().replace(/[^\d.-]/g, '')) : 0;
+          
           totalTunai += tunaiValue;
           totalTfMandiri += tfMandiriKValue + tfMandiriLValue;
           totalTfBca += tfBcaValue;
@@ -149,10 +297,16 @@ class ReportService {
           
           // Check if it's online AWB (TikTok/Shopee/Api)
           const awbString = awb.toString().toLowerCase();
+          
           if (awbString.includes('tiktok') || awbString.includes('shopee') || awbString.includes('api')) {
             onlineAWBs.push(awb.toString());
-            totalOnlineKg += kgValue;
-            totalOnlineKg += secondKGValue;
+            
+            // Handle NaN values properly
+            const safeKgValue = isNaN(kgValue) ? 0 : kgValue;
+            const safeSecondKGValue = isNaN(secondKGValue) ? 0 : secondKGValue;
+            
+            totalOnlineKg += safeKgValue;
+            totalOnlineKg += safeSecondKGValue;
           } else if (awb.toString().match(/^\d{10,}$/)) {
             // Only count numeric AWB as regular AWB
             totalAWB++;
